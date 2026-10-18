@@ -8,7 +8,7 @@
     "scheme": "mobilefrontend",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/appstore.png",
       "bundleIdentifier": "com.udeh.Fundly",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -17,9 +17,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/appstore.png",
-        "backgroundImage": "./assets/images/appstore.png",
-        "monochromeImage": "./assets/images/appstore.png"
+        "foregroundImage": "./assets/images/appstore.png"
       },
       "predictiveBackGestureEnabled": false
     },
