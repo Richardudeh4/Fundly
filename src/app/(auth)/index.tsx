@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
@@ -7,8 +7,9 @@ import { AppButton } from '@/components/AppButton';
 import { AppInput } from '@/components/AppInput';
 import { KeyboardView } from '@/components/KeyboardView';
 import { Colors, Spacing } from '@/constants/theme';
-import { api, ApiError, TokenStorage } from '@/RequestHandler/Request';
+import { api, ApiError } from '@/RequestHandler/Request';
 import { useAuthStore } from '@/store/auth';
+import {Ionicons } from '@expo/vector-icons';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -36,20 +37,19 @@ export default function SignInScreen() {
     };
     setLoading(true);
     try {
-      const response = await api.auth.login(body);
-      const { user, accessToken, refreshToken } = response;
-      await TokenStorage.saveTokens(accessToken, refreshToken);
-      useAuthStore.getState().setAuth(user, accessToken);
-      router.replace("/(tabs)");
+      // Step 1: verify password — backend sends OTP, no tokens yet
+      await api.auth.login(body);
+      router.push({
+        pathname: '/(auth)/otp',
+        params: { phone: phone.trim(), mode: 'verify-login-otp' },
+      });
     } catch (err) {
       if (err instanceof ApiError && err.code === 'PHONE_NOT_VERIFIED') {
-        // Account exists but OTP was never completed — send a fresh OTP and
-        // redirect to the OTP screen in "verify-login" mode so the user can
-        // verify and land directly in the app.
+        // Account exists but signup OTP was never completed
         try {
           await api.auth.sendOtp({ phone: phone.trim() });
         } catch {
-          // If sendOtp fails we still navigate; the OTP screen has a resend button
+          // OTP screen has a resend button — navigate anyway
         }
         router.push({
           pathname: '/(auth)/otp',
@@ -69,7 +69,9 @@ export default function SignInScreen() {
       <View style={[styles.header, { paddingTop: insets.top + Spacing.xl }]}>
         {/* Logo mark */}
         <View style={styles.logoMark}>
-          <AppText style={styles.logoEmoji}>💙</AppText>
+          <Image 
+          style={styles.logoImage}
+          source={require("../../../assets/images/appstore.png")} />
         </View>
         <AppText variant="displayMedium" style={styles.title}>
           Welcome back
@@ -128,10 +130,11 @@ export default function SignInScreen() {
 
         {/* Social placeholder */}
         <AppButton
+        textStyle={{color: "gray"}}
           label="Continue with Google"
           onPress={() => {}}
           variant="outline"
-          leftIcon={<AppText style={styles.socialIcon}>G</AppText>}
+          leftIcon={<Ionicons name="logo-google" size={20}/>}
         />
       </View>
 
@@ -158,16 +161,18 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   logoMark: {
-    width: 56,
-    height: 56,
+    width: 64,
+    height: 64,
     borderRadius: 16,
     backgroundColor: Colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.md,
+    overflow: 'hidden',
   },
-  logoEmoji: {
-    fontSize: 28,
+  logoImage: {
+    width: 40,
+    height: 40,
   },
   title: {
     lineHeight: 36,

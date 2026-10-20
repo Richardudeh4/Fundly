@@ -21,7 +21,8 @@ export default function OTPScreen() {
     mode?: string;
   }>();
 
-  const isVerifyLogin = mode === 'verify-login';
+  const isVerifyLogin = mode === 'verify-login';          // signup OTP not completed
+  const isLoginOtp   = mode === 'verify-login-otp';       // normal login 2FA
 
   // email may come directly as a param (forgot-password flow) or nested in the response JSON (register flow)
   const email: string = emailParam ?? (() => {
@@ -67,16 +68,21 @@ export default function OTPScreen() {
     setLoading(true);
     setError(false);
     try {
-      if (isVerifyLogin) {
-        // Verify OTP then complete login in one step
+      if (isLoginOtp) {
+        // Normal login 2FA — verifyLoginOtp returns tokens + full user profile
+        const result = await api.auth.verifyLoginOtp({ phone: phone!, code: otp });
+        await TokenStorage.saveTokens(result.accessToken, result.refreshToken);
+        useAuthStore.getState().setAuth(result.user, result.accessToken);
+        router.replace('/(tabs)');
+      } else if (isVerifyLogin) {
+        // Signup OTP never completed — verifyOtp marks phone verified and returns tokens
         const result = await api.auth.verifyOtp({ phone: phone!, code: otp });
         await TokenStorage.saveTokens(result.accessToken, result.refreshToken);
-        // Fetch the full user profile now that we have a valid token
         const me = await api.me();
         useAuthStore.getState().setAuth(me, result.accessToken);
         router.replace('/(tabs)');
       } else {
-        // TODO: verify OTP via API (forgot-password flow)
+        // Forgot-password flow
         await new Promise((r) => setTimeout(r, 1200));
         router.replace({ pathname: '/(auth)/reset-password', params: { email, otp, phone } });
       }
@@ -93,7 +99,7 @@ export default function OTPScreen() {
 
   const handleResend = async () => {
     if (!canResend) return;
-    if (isVerifyLogin && phone) {
+    if ((isVerifyLogin || isLoginOtp) && phone) {
       try {
         await api.auth.sendOtp({ phone });
       } catch {
@@ -110,8 +116,8 @@ export default function OTPScreen() {
   return (
     <KeyboardView>
       <AuthHeader
-        title={isVerifyLogin ? 'Verify your number' : 'Check your email'}
-        subtitle={isVerifyLogin
+        title={isVerifyLogin || isLoginOtp ? 'Verify your number' : 'Check your email'}
+        subtitle={isVerifyLogin || isLoginOtp
           ? `We sent a 6-digit code to ${phone}`
           : `We sent a 6-digit code to ${maskedEmail}`}
       />

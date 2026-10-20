@@ -133,13 +133,26 @@ export interface LoginRequest {
   phone: string;
   password: string;
 }
+/** Login step 1 — password verified, OTP dispatched */
 export interface LoginResponse {
+  message: string;
+}
+
+// POST /v1/auth/login/verify-otp
+export interface LoginOtpVerifyRequest {
+  phone: string;
+  code: string;
+}
+export interface LoginOtpVerifyResponse {
   accessToken: string;
   refreshToken: string;
   user: {
     id: string;
     phone: string;
     email: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    profileImage: string | null;
     identityStatus: IdentityStatus;
   };
 }
@@ -161,11 +174,23 @@ export interface LogoutResponse {
   message: string;
 }
 
+// PATCH /v1/me
+export interface UpdateMeRequest {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  /** Publicly accessible URL of the profile image */
+  profileImage?: string;
+}
+
 // GET /v1/me
 export interface MeResponse {
   id: string;
   phone: string;
   email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  profileImage: string | null;
   phoneVerified: boolean;
   identityStatus: IdentityStatus;
   createdAt: string;
@@ -362,11 +387,18 @@ export const api = {
 
     /**
      * Sign in with phone + password.
-     * Returns tokens + user profile — save tokens with `TokenStorage.saveTokens`.
-     * Throws `PHONE_NOT_VERIFIED` (403) if the account exists but OTP was never completed.
+     * Step 1 — verifies password and dispatches an OTP. No tokens yet.
+     * Proceed to `verifyLoginOtp` with the code the user receives.
      */
     login: (body: LoginRequest) =>
       request<LoginResponse>('POST', '/auth/login', body),
+
+    /**
+     * Sign in step 2 — verify the OTP sent during login.
+     * Returns tokens + full user profile on success.
+     */
+    verifyLoginOtp: (body: LoginOtpVerifyRequest) =>
+      request<LoginOtpVerifyResponse>('POST', '/auth/login/verify-otp', body),
 
     /**
      * Rotate the refresh token.
@@ -387,9 +419,91 @@ export const api = {
   /**
    * Fetch the authenticated user's profile.
    * Protected — requires a valid access token.
-   * The client handles transparent refresh automatically.
    */
   me: () => request<MeResponse>('GET', '/me', undefined, { authenticated: true }),
+
+  /**
+   * Update the authenticated user's profile.
+   * All fields are optional — only provided fields are changed.
+   */
+  updateMe: (body: UpdateMeRequest) =>
+    request<MeResponse>('PATCH', '/me', body, { authenticated: true }),
+};
+
+// ─────────────────────────────────────────────
+// Loans & Repayments
+// ─────────────────────────────────────────────
+
+export type LoanStatus = 'PENDING' | 'ACTIVE' | 'PAID' | 'DEFAULTED' | 'REJECTED';
+export type RepaymentStatus = 'PENDING' | 'SUCCESS' | 'FAILED';
+
+export interface LoanSummary {
+  id: string;
+  principalKobo: number;
+  interestRate: string;
+  termMonths: number;
+  monthlyInstalmentKobo: number;
+  totalOwedKobo: number;
+  balanceKobo: number;
+  status: LoanStatus;
+  purpose: string | null;
+  disbursedAt: string | null;
+  dueAt: string | null;
+  createdAt: string;
+}
+
+export interface RepaymentSummary {
+  id: string;
+  loanId: string;
+  amountKobo: number;
+  reference: string;
+  status: RepaymentStatus;
+  paidAt: string | null;
+  createdAt: string;
+}
+
+// POST /v1/loans
+export interface ApplyLoanRequest {
+  amountKobo: number;
+  termMonths: number;
+  purpose?: string;
+}
+
+// POST /v1/loans/:loanId/repay
+export interface RepayLoanRequest {
+  amountKobo: number;
+  reference: string;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Extend the `api` object with loans + repayments namespaces
+// ─────────────────────────────────────────────────────────────────
+export const loanApi = {
+  /** Apply for a new loan */
+  apply: (body: ApplyLoanRequest) =>
+    request<LoanSummary>('POST', '/loans', body, { authenticated: true }),
+
+  /** List all loans for the current user */
+  list: () =>
+    request<LoanSummary[]>('GET', '/loans', undefined, { authenticated: true }),
+
+  /** Get a single loan by ID */
+  get: (loanId: string) =>
+    request<LoanSummary>('GET', `/loans/${loanId}`, undefined, { authenticated: true }),
+
+  /** Make a repayment against a specific loan */
+  repay: (loanId: string, body: RepayLoanRequest) =>
+    request<RepaymentSummary>('POST', `/loans/${loanId}/repay`, body, { authenticated: true }),
+
+  /** Repayment history for a specific loan */
+  repayments: (loanId: string) =>
+    request<RepaymentSummary[]>('GET', `/loans/${loanId}/repayments`, undefined, { authenticated: true }),
+};
+
+export const repaymentApi = {
+  /** All repayments across all loans for the current user */
+  listAll: () =>
+    request<RepaymentSummary[]>('GET', '/repayments', undefined, { authenticated: true }),
 };
 
 // ─────────────────────────────────────────────

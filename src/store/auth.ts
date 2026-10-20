@@ -13,8 +13,10 @@ interface User {
     id: string;
     phone: string;
     email: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    profileImage: string | null;
     identityStatus?: string;
-    name?: string;
 }
 
 interface AuthState {
